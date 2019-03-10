@@ -344,6 +344,51 @@ namespace Microsoft.Test.E2E.AspNet.OData.OpenType
         [InlineData("application/json;odata.metadata=full")]
         [InlineData("application/json;odata.metadata=minimal")]
         [InlineData("application/json;odata.metadata=none")]
+        public async Task PatchOpenEntityWithComplexType(string format)
+        {
+            foreach (string routing in Routings)
+            {
+                await ResetDatasource();
+
+                var patchUri = string.Format(this.BaseAddress + "/{0}/Accounts(1)?$format={1}", routing, format);
+                var request = new HttpRequestMessage(new HttpMethod("PATCH"), patchUri);
+
+                // Both Owner and Members are DynamicProperties on the Account OpenType. 
+                request.Content = new StringContent(
+                 @"{
+                    '@odata.type':'#Microsoft.Test.E2E.AspNet.OData.OpenType.Account',
+                    'Owner': {
+                        '@odata.type':'#Microsoft.Test.E2E.AspNet.OData.OpenType.Employee',
+                        'Name':'The Creator'
+                    },
+                    'Members@odata.type':'#Collection(Microsoft.Test.E2E.AspNet.OData.OpenType.Employee)',
+                    'Members':[{
+                        'Name': 'John Doe'
+                    }]
+                  }");
+
+                request.Content.Headers.ContentType = MediaTypeHeaderValue.Parse("application/json");
+                using (var patchResponse = await this.Client.SendAsync(request))
+                {
+                    Assert.Equal(HttpStatusCode.OK, patchResponse.StatusCode);
+
+                    var content = await patchResponse.Content.ReadAsObject<JObject>();
+
+                    // SUCCEEDS - Collection is patched
+                    Assert.NotEmpty(((JArray)content["Members"]));
+
+                    var owner = content["Owner"];
+                    // FAILS - Single Employee is not patched, but we would expect it to be
+                    Assert.NotNull(owner);
+                }
+
+            }
+        }
+
+        [Theory]
+        [InlineData("application/json;odata.metadata=full")]
+        [InlineData("application/json;odata.metadata=minimal")]
+        [InlineData("application/json;odata.metadata=none")]
         public async Task PutEntityWithOpenComplexType(string format)
         {
             foreach (string routing in Routings)
